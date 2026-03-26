@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#131722; overflow:hidden; font-family:'Trebuchet MS',sans-serif; }
+#chart { width:100vw; height:100vh; }
+#watermark { position:absolute; top:10px; left:12px; z-index:10;
+  color:rgba(255,255,255,0.06); font-size:48px; font-weight:bold;
+  pointer-events:none; user-select:none; }
+#info-bar { position:absolute; top:8px; left:12px; z-index:20;
+  display:flex; gap:16px; align-items:center; }
+#info-bar span { font-size:12px; }
+.lbl { color:#787b86; } .val { color:#d1d4dc; font-weight:600; }
+.up { color:#26a69a; } .dn { color:#ef5350; }
+#status-dot { width:8px; height:8px; border-radius:50%;
+  display:inline-block; margin-right:4px; }
+.live { background:#26a69a; animation:pulse 2s infinite; }
+.offline { background:#ef5350; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+#loading { position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%); color:#787b86; font-size:16px; }
+</style>
+</head>
+<body>
+<div id="watermark"></div>
+<div id="info-bar">
+  <span><span id="status-dot" class="offline"></span><span id="status-text" class="lbl">Loading...</span></span>
+  <span class="lbl">O </span><span id="o" class="val">-</span>
+  <span class="lbl">H </span><span id="h" class="val">-</span>
+  <span class="lbl">L </span><span id="l" class="val">-</span>
+  <span class="lbl">C </span><span id="c" class="val">-</span>
+  <span class="lbl">Vol </span><span id="v" class="val">-</span>
+  <span id="chg" class="val">-</span>
+</div>
+<div id="loading">Loading chart...</div>
+<div id="chart"></div>
+
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+// ═══════════════════════════════════════════
+// TradingView Lightweight Charts — Full Setup
+// ═══════════════════════════════════════════
+
+const chartEl = document.getElementById('chart');
+const loading = document.getElementById('loading');
+
+// ── Create Chart ──
+const chart = LightweightCharts.createChart(chartEl, {
+  width: window.innerWidth,
+  height: window.innerHeight,
+  layout: {
+    background: { type: 'solid', color: '#131722' },
+    textColor: '#d1d4dc',
+    fontSize: 12,
+    fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif",
+  },
+  grid: {
+    vertLines: { color: '#1e222d' },
+    horzLines: { color: '#1e222d' },
+  },
+  crosshair: {
+    mode: LightweightCharts.CrosshairMode.Normal,
+    vertLine: {
+      color: '#9598a1',
+      width: 0.5,
+      style: LightweightCharts.LineStyle.Solid,
+      labelBackgroundColor: '#2a2e39',
+    },
+    horzLine: {
+      color: '#9598a1',
+      width: 0.5,
+      style: LightweightCharts.LineStyle.Solid,
+      labelBackgroundColor: '#2a2e39',
+    },
+  },
+  rightPriceScale: {
+    borderColor: '#2a2e39',
+    scaleMargins: { top: 0.1, bottom: 0.2 },
+  },
+  timeScale: {
+    borderColor: '#2a2e39',
+    timeVisible: true,
+    secondsVisible: false,
+    rightOffset: 5,
+    barSpacing: 8,
+    minBarSpacing: 3,
+  },
+  handleScroll: { vertTouchDrag: false },
+});
+
+// ── Candlestick Series ──
+const candleSeries = chart.addCandlestickSeries({
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderDownColor: '#ef5350',
+  borderUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+  wickUpColor: '#26a69a',
+});
+
+// ── Volume Series ──
+const volumeSeries = chart.addHistogramSeries({
+  color: '#26a69a',
+  priceFormat: { type: 'volume' },
+  priceScaleId: 'volume',
+});
+chart.priceScale('volume').applyOptions({
+  scaleMargins: { top: 0.85, bottom: 0 },
+});
+
+// ── SMA Lines ──
+const smaFast = chart.addLineSeries({
+  color: '#f7a21b', lineWidth: 1,
+  title: 'SMA Fast', priceLineVisible: false,
+  lastValueVisible: false,
+});
+const smaSlow = chart.addLineSeries({
+  color: '#2962ff', lineWidth: 1,
+  title: 'SMA Slow', priceLineVisible: false,
+  lastValueVisible: false,
+});
+
+// ── Trade Markers Storage ──
+let tradeMarkers = [];
+
+// ── Resize ──
+window.addEventListener('resize', () => {
+  chart.resize(window.innerWidth, window.innerHeight);
+});
+
+// ── Info Bar Update on Crosshair Move ──
+chart.subscribeCrosshairMove((param) => {
+  if (!param.time || !param.seriesData) return;
+  const candle = param.seriesData.get(candleSeries);
+  const vol = param.seriesData.get(volumeSeries);
+  if (candle) {
+    document.getElementById('o').textContent = candle.open?.toFixed(4) || '-';
+    document.getElementById('h').textContent = candle.high?.toFixed(4) || '-';
+    document.getElementById('l').textContent = candle.low?.toFixed(4) || '-';
+    document.getElementById('c').textContent = candle.close?.toFixed(4) || '-';
+    const chg = ((candle.close - candle.open) / candle.open * 100);
+    const chgEl = document.getElementById('chg');
+    chgEl.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`;
+    chgEl.className = chg >= 0 ? 'up' : 'dn';
+  }
+  if (vol) {
+    document.getElementById('v').textContent = formatVolume(vol.value);
+  }
+});
+
+function formatVolume(v) {
+  if (v >= 1e9) return (v/1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return (v/1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return (v/1e3).toFixed(1) + 'K';
+  return v?.toFixed(0) || '0';
+}
+
+// ═══════════════════════════════════════════
+// DATA LOADING + LIVE UPDATES
+// ═══════════════════════════════════════════
+
+let currentSymbol = '';
+let liveInterval = null;
+let lastTimestamp = 0;
+
+// ── Calculate SMA ──
+function calcSMA(data, period) {
+  const result = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) continue;
+    let sum = 0;
+    for (let j = 0; j < period; j++) {
+      sum += data[i - j].close;
+    }
+    result.push({ time: data[i].time, value: sum / period });
+  }
+  return result;
+}
+
+// ── Load Data from Dash server ──
+async function loadData() {
+  try {
+    const resp = await fetch('/api/chart-data');
+    if (!resp.ok) throw new Error('No data');
+    const json = await resp.json();
+
+    if (!json.candles || json.candles.length === 0) {
+      loading.textContent = 'No data available';
+      return;
+    }
+
+    loading.style.display = 'none';
+
+    // Symbol watermark
+    currentSymbol = json.symbol || '';
+    document.getElementById('watermark').textContent = currentSymbol;
+
+    // Candle data
+    const candles = json.candles;
+    candleSeries.setData(candles);
+
+    // Volume data
+    const volumes = candles.map(c => ({
+      time: c.time,
+      value: c.volume || 0,
+      color: c.close >= c.open
+        ? 'rgba(38,166,154,0.5)'
+        : 'rgba(239,83,80,0.5)',
+    }));
+    volumeSeries.setData(volumes);
+
+    // SMA
+    if (json.sma_fast) {
+      smaFast.setData(json.sma_fast);
+    } else if (candles.length > 10) {
+      smaFast.setData(calcSMA(candles, json.fast_period || 10));
+    }
+    if (json.sma_slow) {
+      smaSlow.setData(json.sma_slow);
+    } else if (candles.length > 30) {
+      smaSlow.setData(calcSMA(candles, json.slow_period || 30));
+    }
+
+    // Trade markers
+    if (json.trades && json.trades.length > 0) {
+      tradeMarkers = json.trades.map(t => ({
+        time: t.time,
+        position: t.side === 'LONG' ? 'belowBar' : 'aboveBar',
+        color: t.side === 'LONG' ? '#2196F3' : '#FF9800',
+        shape: t.side === 'LONG' ? 'arrowUp' : 'arrowDown',
+        text: `${t.side} $${t.price?.toFixed(2)}${t.pnl ? ' → $' + t.pnl.toFixed(0) : ''}`,
+        size: 2,
+      }));
+
+      // Add exit markers
+      if (json.exits) {
+        json.exits.forEach(e => {
+          tradeMarkers.push({
+            time: e.time,
+            position: 'aboveBar',
+            color: e.pnl >= 0 ? '#26a69a' : '#ef5350',
+            shape: 'circle',
+            text: `EXIT $${e.price?.toFixed(2)} (${e.pnl >= 0 ? '+' : ''}$${e.pnl?.toFixed(0)})`,
+            size: 1,
+          });
+        });
+      }
+
+      // Sort markers by time
+      tradeMarkers.sort((a, b) => a.time - b.time);
+      candleSeries.setMarkers(tradeMarkers);
+    }
+
+    // SL/TP lines
+    if (json.sl_lines) {
+      json.sl_lines.forEach(sl => {
+        candleSeries.createPriceLine({
+          price: sl.price,
+          color: '#ef5350',
+          lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: 'SL',
+        });
+      });
+    }
+    if (json.tp_lines) {
+      json.tp_lines.forEach(tp => {
+        candleSeries.createPriceLine({
+          price: tp.price,
+          color: '#26a69a',
+          lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: 'TP',
+        });
+      });
+    }
+
+    // Fit content
+    chart.timeScale().fitContent();
+
+    // Update last timestamp
+    if (candles.length > 0) {
+      lastTimestamp = candles[candles.length - 1].time;
+    }
+
+    // Status
+    document.getElementById('status-dot').className = json.is_live ? 'live' : 'offline';
+    document.getElementById('status-text').textContent =
+      json.is_live ? `LIVE • ${currentSymbol}` : `${currentSymbol} • ${json.source || ''}`;
+    document.getElementById('status-text').className = json.is_live ? 'up' : 'lbl';
+
+  } catch (e) {
+    loading.textContent = 'Run backtest first → data will appear here';
+    console.log('Chart data error:', e);
+  }
+}
+
+// ── Live Update (append new bar) ──
+async function liveUpdate() {
+  try {
+    const resp = await fetch(`/api/live-bar?after=${lastTimestamp}`);
+    if (!resp.ok) return;
+    const json = await resp.json();
+
+    if (json.bar) {
+      candleSeries.update(json.bar);
+      volumeSeries.update({
+        time: json.bar.time,
+        value: json.bar.volume || 0,
+        color: json.bar.close >= json.bar.open
+          ? 'rgba(38,166,154,0.5)'
+          : 'rgba(239,83,80,0.5)',
+      });
+      lastTimestamp = json.bar.time;
+    }
+  } catch(e) {}
+}
+
+// ── Init ──
+loadData();
+
+// Listen for messages from Dash parent
+window.addEventListener('message', (event) => {
+  if (event.data === 'reload') {
+    loadData();
+  }
+  if (event.data === 'start-live') {
+    if (liveInterval) clearInterval(liveInterval);
+    liveInterval = setInterval(liveUpdate, 5000); // 5 sec polling
+    document.getElementById('status-dot').className = 'live';
+  }
+  if (event.data === 'stop-live') {
+    if (liveInterval) clearInterval(liveInterval);
+    liveInterval = null;
+    document.getElementById('status-dot').className = 'offline';
+  }
+  if (event.data?.type === 'theme') {
+    const isDark = event.data.theme === 'dark';
+    chart.applyOptions({
+      layout: {
+        background: { color: isDark ? '#131722' : '#ffffff' },
+        textColor: isDark ? '#d1d4dc' : '#333333',
+      },
+      grid: {
+        vertLines: { color: isDark ? '#1e222d' : '#e9ecef' },
+        horzLines: { color: isDark ? '#1e222d' : '#e9ecef' },
+      },
+    });
+  }
+});
+</script>
+</body>
+</html>
