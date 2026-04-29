@@ -1,0 +1,48 @@
+{
+  "name": "s_20260326_233549",
+  "saved_at": "2026-03-26T23:35:49.160836",
+  "results": {
+    "\ud83d\udcc8 AAPL \u2022 1d": {
+      "metrics": {
+        "initial_capital": 100000.0,
+        "final_equity": 103753.22921638134,
+        "total_return": 0.0375322921638134,
+        "total_return_pct": 3.75322921638134,
+        "n_years": 6.223134839151267,
+        "cagr": 0.00593822693795909,
+        "sharpe_ratio": 0.7949616309568914,
+        "sortino_ratio": 0.6280443131645056,
+        "max_drawdown": 0.6597171627970003,
+        "max_drawdown_pct": 65.97171627970003,
+        "calmar_ratio": 0.009001170915097634,
+        "annual_volatility": 2.1541111498429624,
+        "total_trades": 26.0,
+        "winning_trades": 11.0,
+        "losing_trades": 15.0,
+        "win_rate": 0.4230769230769231,
+        "total_pnl": 5037.73133340893,
+        "avg_pnl": 193.75889743880487,
+        "avg_pnl_pct": 0.41568587256218803,
+        "avg_win": 3053.877827047098,
+        "avg_loss": -1903.66165094061,
+        "largest_win": 3984.7816922049406,
+        "largest_loss": -2649.8892891958285,
+        "profit_factor": 1.1764225041748626,
+        "avg_bars_held": 10.653846153846153,
+        "total_commission": 1206.9770365492757,
+        "expectancy": 193.75889743880487,
+        "expectancy_pct": 0.41568587256218803,
+        "payoff_ratio": 1.6042125056929943,
+        "sqn": 0.3479486811679703,
+        "avg_mae": 2.6865734106975316,
+        "avg_mfe": 3.5808819131593053,
+        "max_win_streak": 3.0,
+        "max_loss_streak": 3.0,
+        "long_trades": 26.0,
+        "short_trades": 0.0,
+        "long_pnl": 5037.73133340893,
+        "short_pnl": 0.0
+      }
+    }
+  }
+}

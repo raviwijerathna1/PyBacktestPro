@@ -5,13 +5,52 @@
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:#131722; overflow:hidden; font-family:'Trebuchet MS',sans-serif; }
-#chart { width:100vw; height:100vh; }
-#watermark { position:absolute; top:10px; left:12px; z-index:10;
+#chart { width:100vw; height:calc(100vh - 40px); margin-top:40px; }
+#watermark { position:absolute; top:50px; left:12px; z-index:10;
   color:rgba(255,255,255,0.06); font-size:48px; font-weight:bold;
   pointer-events:none; user-select:none; }
-#info-bar { position:absolute; top:8px; left:12px; z-index:20;
-  display:flex; gap:16px; align-items:center; }
-#info-bar span { font-size:12px; }
+
+/* ── Top Toolbar ── */
+#toolbar { 
+  position:absolute; top:0; left:0; right:0; height:40px;
+  background:#1e222d; border-bottom:1px solid #2a2e39;
+  display:flex; align-items:center; padding:0 12px; gap:6px;
+  z-index:30;
+}
+#tf-group {
+  display:flex; gap:2px; margin-right:12px;
+}
+.tf-btn {
+  background:none; border:1px solid transparent; color:#787b86;
+  padding:4px 10px; border-radius:4px; cursor:pointer;
+  font-size:12px; font-weight:600; font-family:inherit;
+  transition: all 0.15s;
+}
+.tf-btn:hover { color:#d1d4dc; background:#2a2e39; }
+.tf-btn.active { 
+  color:#2962ff; background:rgba(41,98,255,0.12);
+  border-color:rgba(41,98,255,0.3);
+}
+
+/* ── Chart Type Buttons ── */
+.ct-btn {
+  background:none; border:none; color:#787b86;
+  padding:4px 8px; border-radius:4px; cursor:pointer;
+  font-size:14px; transition: all 0.15s;
+}
+.ct-btn:hover { color:#d1d4dc; background:#2a2e39; }
+.ct-btn.active { color:#2962ff; }
+
+.separator {
+  width:1px; height:20px; background:#2a2e39; margin:0 4px;
+}
+
+/* ── Info Bar ── */
+#info-bar { 
+  display:flex; gap:12px; align-items:center;
+  margin-left:auto;
+}
+#info-bar span { font-size:11px; }
 .lbl { color:#787b86; } .val { color:#d1d4dc; font-weight:600; }
 .up { color:#26a69a; } .dn { color:#ef5350; }
 #status-dot { width:8px; height:8px; border-radius:50%;
@@ -24,16 +63,49 @@ body { background:#131722; overflow:hidden; font-family:'Trebuchet MS',sans-seri
 </style>
 </head>
 <body>
-<div id="watermark"></div>
-<div id="info-bar">
-  <span><span id="status-dot" class="offline"></span><span id="status-text" class="lbl">Loading...</span></span>
-  <span class="lbl">O </span><span id="o" class="val">-</span>
-  <span class="lbl">H </span><span id="h" class="val">-</span>
-  <span class="lbl">L </span><span id="l" class="val">-</span>
-  <span class="lbl">C </span><span id="c" class="val">-</span>
-  <span class="lbl">Vol </span><span id="v" class="val">-</span>
-  <span id="chg" class="val">-</span>
+
+<div id="toolbar">
+  <!-- Timeframe Buttons -->
+  <div id="tf-group">
+    <button class="tf-btn" data-tf="1m">1m</button>
+    <button class="tf-btn" data-tf="5m">5m</button>
+    <button class="tf-btn" data-tf="15m">15m</button>
+    <button class="tf-btn" data-tf="1h">1H</button>
+    <button class="tf-btn active" data-tf="1d">1D</button>
+    <button class="tf-btn" data-tf="1wk">1W</button>
+    <button class="tf-btn" data-tf="1mo">1M</button>
+  </div>
+
+  <div class="separator"></div>
+
+  <!-- Chart Type Buttons -->
+  <button class="ct-btn active" data-type="candles" title="Candlestick">🕯️</button>
+  <button class="ct-btn" data-type="line" title="Line">📈</button>
+  <button class="ct-btn" data-type="area" title="Area">▤</button>
+  <button class="ct-btn" data-type="bars" title="Bars">📊</button>
+
+  <div class="separator"></div>
+
+  <!-- Indicator Toggles -->
+  <button class="ct-btn active" id="toggle-sma" title="SMA">SMA</button>
+  <button class="ct-btn active" id="toggle-vol" title="Volume">Vol</button>
+  <button class="ct-btn" id="toggle-trades" title="Trades">🔺</button>
+
+  <div class="separator"></div>
+
+  <!-- Status + OHLCV -->
+  <div id="info-bar">
+    <span><span id="status-dot" class="offline"></span><span id="status-text" class="lbl">Loading...</span></span>
+    <span class="lbl">O </span><span id="o" class="val">-</span>
+    <span class="lbl">H </span><span id="h" class="val">-</span>
+    <span class="lbl">L </span><span id="l" class="val">-</span>
+    <span class="lbl">C </span><span id="c" class="val">-</span>
+    <span class="lbl">Vol </span><span id="v" class="val">-</span>
+    <span id="chg" class="val">-</span>
+  </div>
 </div>
+
+<div id="watermark"></div>
 <div id="loading">Loading chart...</div>
 <div id="chart"></div>
 
@@ -46,10 +118,18 @@ body { background:#131722; overflow:hidden; font-family:'Trebuchet MS',sans-seri
 const chartEl = document.getElementById('chart');
 const loading = document.getElementById('loading');
 
+// ── State ──
+let currentTF = '1d';
+let currentChartType = 'candles';
+let showSMA = true;
+let showVolume = true;
+let showTrades = true;
+let currentData = null;
+
 // ── Create Chart ──
 const chart = LightweightCharts.createChart(chartEl, {
   width: window.innerWidth,
-  height: window.innerHeight,
+  height: window.innerHeight - 40,
   layout: {
     background: { type: 'solid', color: '#131722' },
     textColor: '#d1d4dc',
@@ -63,14 +143,12 @@ const chart = LightweightCharts.createChart(chartEl, {
   crosshair: {
     mode: LightweightCharts.CrosshairMode.Normal,
     vertLine: {
-      color: '#9598a1',
-      width: 0.5,
+      color: '#9598a1', width: 0.5,
       style: LightweightCharts.LineStyle.Solid,
       labelBackgroundColor: '#2a2e39',
     },
     horzLine: {
-      color: '#9598a1',
-      width: 0.5,
+      color: '#9598a1', width: 0.5,
       style: LightweightCharts.LineStyle.Solid,
       labelBackgroundColor: '#2a2e39',
     },
@@ -90,60 +168,95 @@ const chart = LightweightCharts.createChart(chartEl, {
   handleScroll: { vertTouchDrag: false },
 });
 
-// ── Candlestick Series ──
-const candleSeries = chart.addCandlestickSeries({
-  upColor: '#26a69a',
-  downColor: '#ef5350',
-  borderDownColor: '#ef5350',
-  borderUpColor: '#26a69a',
-  wickDownColor: '#ef5350',
-  wickUpColor: '#26a69a',
-});
+// ── Series (created once, data updated) ──
+let candleSeries = null;
+let lineSeries = null;
+let areaSeries = null;
+let barSeries = null;
+let volumeSeries = null;
+let smaFastSeries = null;
+let smaSlowSeries = null;
 
-// ── Volume Series ──
-const volumeSeries = chart.addHistogramSeries({
-  color: '#26a69a',
-  priceFormat: { type: 'volume' },
-  priceScaleId: 'volume',
-});
-chart.priceScale('volume').applyOptions({
-  scaleMargins: { top: 0.85, bottom: 0 },
-});
+function createCandleSeries() {
+  return chart.addCandlestickSeries({
+    upColor: '#26a69a', downColor: '#ef5350',
+    borderDownColor: '#ef5350', borderUpColor: '#26a69a',
+    wickDownColor: '#ef5350', wickUpColor: '#26a69a',
+  });
+}
 
-// ── SMA Lines ──
-const smaFast = chart.addLineSeries({
-  color: '#f7a21b', lineWidth: 1,
-  title: 'SMA Fast', priceLineVisible: false,
-  lastValueVisible: false,
-});
-const smaSlow = chart.addLineSeries({
-  color: '#2962ff', lineWidth: 1,
-  title: 'SMA Slow', priceLineVisible: false,
-  lastValueVisible: false,
-});
+function createLineSeries() {
+  return chart.addLineSeries({
+    color: '#2962ff', lineWidth: 2,
+    crosshairMarkerVisible: true,
+    priceLineVisible: false,
+    lastValueVisible: true,
+  });
+}
 
-// ── Trade Markers Storage ──
-let tradeMarkers = [];
+function createAreaSeries() {
+  return chart.addAreaSeries({
+    topColor: 'rgba(38,166,154,0.4)',
+    bottomColor: 'rgba(38,166,154,0.02)',
+    lineColor: '#26a69a', lineWidth: 2,
+    priceLineVisible: false,
+    lastValueVisible: true,
+  });
+}
+
+function createBarSeries() {
+  return chart.addBarSeries({
+    upColor: '#26a69a', downColor: '#ef5350',
+  });
+}
+
+function createVolumeSeries() {
+  const s = chart.addHistogramSeries({
+    color: '#26a69a',
+    priceFormat: { type: 'volume' },
+    priceScaleId: 'volume',
+  });
+  chart.priceScale('volume').applyOptions({
+    scaleMargins: { top: 0.85, bottom: 0 },
+  });
+  return s;
+}
+
+function createSMASeries(color, title) {
+  return chart.addLineSeries({
+    color: color, lineWidth: 1,
+    title: title, priceLineVisible: false,
+    lastValueVisible: false,
+  });
+}
 
 // ── Resize ──
 window.addEventListener('resize', () => {
-  chart.resize(window.innerWidth, window.innerHeight);
+  chart.resize(window.innerWidth, window.innerHeight - 40);
 });
 
-// ── Info Bar Update on Crosshair Move ──
+// ── Info Bar on Crosshair ──
 chart.subscribeCrosshairMove((param) => {
   if (!param.time || !param.seriesData) return;
-  const candle = param.seriesData.get(candleSeries);
-  const vol = param.seriesData.get(volumeSeries);
+  // Try to get data from whichever price series is active
+  const priceSeries = candleSeries || lineSeries || areaSeries || barSeries;
+  const candle = priceSeries ? param.seriesData.get(priceSeries) : null;
+  const vol = volumeSeries ? param.seriesData.get(volumeSeries) : null;
   if (candle) {
-    document.getElementById('o').textContent = candle.open?.toFixed(4) || '-';
-    document.getElementById('h').textContent = candle.high?.toFixed(4) || '-';
-    document.getElementById('l').textContent = candle.low?.toFixed(4) || '-';
-    document.getElementById('c').textContent = candle.close?.toFixed(4) || '-';
-    const chg = ((candle.close - candle.open) / candle.open * 100);
-    const chgEl = document.getElementById('chg');
-    chgEl.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`;
-    chgEl.className = chg >= 0 ? 'up' : 'dn';
+    const o = candle.open ?? candle.value;
+    const h = candle.high ?? candle.value;
+    const l = candle.low ?? candle.value;
+    const c = candle.close ?? candle.value;
+    document.getElementById('o').textContent = o?.toFixed(4) || '-';
+    document.getElementById('h').textContent = h?.toFixed(4) || '-';
+    document.getElementById('l').textContent = l?.toFixed(4) || '-';
+    document.getElementById('c').textContent = c?.toFixed(4) || '-';
+    if (o && c) {
+      const chg = ((c - o) / o * 100);
+      const chgEl = document.getElementById('chg');
+      chgEl.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`;
+      chgEl.className = chg >= 0 ? 'up' : 'dn';
+    }
   }
   if (vol) {
     document.getElementById('v').textContent = formatVolume(vol.value);
@@ -158,185 +271,290 @@ function formatVolume(v) {
 }
 
 // ═══════════════════════════════════════════
-// DATA LOADING + LIVE UPDATES
+// REMOVE ALL SERIES
 // ═══════════════════════════════════════════
-
-let currentSymbol = '';
-let liveInterval = null;
-let lastTimestamp = 0;
-
-// ── Calculate SMA ──
-function calcSMA(data, period) {
-  const result = [];
-  for (let i = 0; i < data.length; i++) {
-    if (i < period - 1) continue;
-    let sum = 0;
-    for (let j = 0; j < period; j++) {
-      sum += data[i - j].close;
-    }
-    result.push({ time: data[i].time, value: sum / period });
-  }
-  return result;
+function removeAllSeries() {
+  try { if (candleSeries) chart.removeSeries(candleSeries); } catch(e) {}
+  try { if (lineSeries) chart.removeSeries(lineSeries); } catch(e) {}
+  try { if (areaSeries) chart.removeSeries(areaSeries); } catch(e) {}
+  try { if (barSeries) chart.removeSeries(barSeries); } catch(e) {}
+  try { if (volumeSeries) chart.removeSeries(volumeSeries); } catch(e) {}
+  try { if (smaFastSeries) chart.removeSeries(smaFastSeries); } catch(e) {}
+  try { if (smaSlowSeries) chart.removeSeries(smaSlowSeries); } catch(e) {}
+  candleSeries = lineSeries = areaSeries = barSeries = null;
+  volumeSeries = smaFastSeries = smaSlowSeries = null;
 }
 
-// ── Load Data from Dash server ──
-async function loadData() {
-  try {
-    const resp = await fetch('/api/chart-data');
-    if (!resp.ok) throw new Error('No data');
-    const json = await resp.json();
+// ═══════════════════════════════════════════
+// RENDER CHART FROM DATA
+// ═══════════════════════════════════════════
+function renderChart(json) {
+  if (!json || !json.candles || json.candles.length === 0) return;
 
-    if (!json.candles || json.candles.length === 0) {
-      loading.textContent = 'No data available';
-      return;
-    }
+  removeAllSeries();
+  const candles = json.candles;
 
-    loading.style.display = 'none';
-
-    // Symbol watermark
-    currentSymbol = json.symbol || '';
-    document.getElementById('watermark').textContent = currentSymbol;
-
-    // Candle data
-    const candles = json.candles;
+  // ── Price Series ──
+  if (currentChartType === 'candles') {
+    candleSeries = createCandleSeries();
     candleSeries.setData(candles);
+  } else if (currentChartType === 'line') {
+    lineSeries = createLineSeries();
+    lineSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
+  } else if (currentChartType === 'area') {
+    areaSeries = createAreaSeries();
+    areaSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
+  } else if (currentChartType === 'bars') {
+    barSeries = createBarSeries();
+    barSeries.setData(candles);
+  }
 
-    // Volume data
-    const volumes = candles.map(c => ({
+  // ── Volume ──
+  if (showVolume) {
+    volumeSeries = createVolumeSeries();
+    volumeSeries.setData(candles.map(c => ({
       time: c.time,
       value: c.volume || 0,
       color: c.close >= c.open
         ? 'rgba(38,166,154,0.5)'
         : 'rgba(239,83,80,0.5)',
-    }));
-    volumeSeries.setData(volumes);
+    })));
+  }
 
-    // SMA
-    if (json.sma_fast) {
-      smaFast.setData(json.sma_fast);
+  // ── SMA ──
+  if (showSMA) {
+    smaFastSeries = createSMASeries('#f7a21b', 'SMA Fast');
+    smaSlowSeries = createSMASeries('#2962ff', 'SMA Slow');
+
+    if (json.sma_fast && json.sma_fast.length > 0) {
+      smaFastSeries.setData(json.sma_fast);
     } else if (candles.length > 10) {
-      smaFast.setData(calcSMA(candles, json.fast_period || 10));
+      smaFastSeries.setData(calcSMA(candles, json.fast_period || 10));
     }
-    if (json.sma_slow) {
-      smaSlow.setData(json.sma_slow);
+    if (json.sma_slow && json.sma_slow.length > 0) {
+      smaSlowSeries.setData(json.sma_slow);
     } else if (candles.length > 30) {
-      smaSlow.setData(calcSMA(candles, json.slow_period || 30));
+      smaSlowSeries.setData(calcSMA(candles, json.slow_period || 30));
     }
+  }
 
-    // Trade markers
-    if (json.trades && json.trades.length > 0) {
-      tradeMarkers = json.trades.map(t => ({
+  // ── Trade Markers ──
+  if (showTrades && json.trades && json.trades.length > 0) {
+    const activeSeries = candleSeries || lineSeries || areaSeries || barSeries;
+    if (activeSeries) {
+      let markers = json.trades.map(t => ({
         time: t.time,
         position: t.side === 'LONG' ? 'belowBar' : 'aboveBar',
         color: t.side === 'LONG' ? '#2196F3' : '#FF9800',
         shape: t.side === 'LONG' ? 'arrowUp' : 'arrowDown',
-        text: `${t.side} $${t.price?.toFixed(2)}${t.pnl ? ' → $' + t.pnl.toFixed(0) : ''}`,
+        text: `${t.side} $${t.price?.toFixed(2)}`,
         size: 2,
       }));
-
-      // Add exit markers
       if (json.exits) {
         json.exits.forEach(e => {
-          tradeMarkers.push({
+          markers.push({
             time: e.time,
             position: 'aboveBar',
             color: e.pnl >= 0 ? '#26a69a' : '#ef5350',
             shape: 'circle',
-            text: `EXIT $${e.price?.toFixed(2)} (${e.pnl >= 0 ? '+' : ''}$${e.pnl?.toFixed(0)})`,
+            text: `EXIT ${e.pnl >= 0 ? '+' : ''}$${e.pnl?.toFixed(0)}`,
             size: 1,
           });
         });
       }
-
-      // Sort markers by time
-      tradeMarkers.sort((a, b) => a.time - b.time);
-      candleSeries.setMarkers(tradeMarkers);
+      markers.sort((a, b) => a.time - b.time);
+      activeSeries.setMarkers(markers);
     }
+  }
 
-    // SL/TP lines
-    if (json.sl_lines) {
-      json.sl_lines.forEach(sl => {
-        candleSeries.createPriceLine({
-          price: sl.price,
-          color: '#ef5350',
-          lineWidth: 1,
-          lineStyle: LightweightCharts.LineStyle.Dashed,
-          axisLabelVisible: true,
-          title: 'SL',
-        });
-      });
+  chart.timeScale().fitContent();
+
+  // Status bar
+  document.getElementById('watermark').textContent = json.symbol || '';
+  document.getElementById('status-dot').className = json.is_live ? 'live' : 'offline';
+  document.getElementById('status-text').textContent =
+    json.is_live ? `LIVE • ${json.symbol}` : `${json.symbol || ''} • ${json.source || ''}`;
+  document.getElementById('status-text').className = json.is_live ? 'up' : 'lbl';
+}
+
+// ── SMA Calculator ──
+function calcSMA(data, period) {
+  const result = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) continue;
+    let sum = 0;
+    for (let j = 0; j < period; j++) sum += data[i - j].close;
+    result.push({ time: data[i].time, value: sum / period });
+  }
+  return result;
+}
+
+// ═══════════════════════════════════════════
+// LOAD DATA
+// ═══════════════════════════════════════════
+let lastTimestamp = 0;
+let liveInterval = null;
+
+async function loadData() {
+  try {
+    const resp = await fetch('/api/chart-data');
+    if (!resp.ok) throw new Error('No data');
+    const json = await resp.json();
+    if (!json.candles || json.candles.length === 0) {
+      loading.textContent = 'No data available';
+      return;
     }
-    if (json.tp_lines) {
-      json.tp_lines.forEach(tp => {
-        candleSeries.createPriceLine({
-          price: tp.price,
-          color: '#26a69a',
-          lineWidth: 1,
-          lineStyle: LightweightCharts.LineStyle.Dashed,
-          axisLabelVisible: true,
-          title: 'TP',
-        });
-      });
+    loading.style.display = 'none';
+    currentData = json;
+    renderChart(json);
+    if (json.candles.length > 0) {
+      lastTimestamp = json.candles[json.candles.length - 1].time;
     }
-
-    // Fit content
-    chart.timeScale().fitContent();
-
-    // Update last timestamp
-    if (candles.length > 0) {
-      lastTimestamp = candles[candles.length - 1].time;
-    }
-
-    // Status
-    document.getElementById('status-dot').className = json.is_live ? 'live' : 'offline';
-    document.getElementById('status-text').textContent =
-      json.is_live ? `LIVE • ${currentSymbol}` : `${currentSymbol} • ${json.source || ''}`;
-    document.getElementById('status-text').className = json.is_live ? 'up' : 'lbl';
-
   } catch (e) {
     loading.textContent = 'Run backtest first → data will appear here';
-    console.log('Chart data error:', e);
   }
 }
 
-// ── Live Update (append new bar) ──
+// ═══════════════════════════════════════════
+// TIMEFRAME BUTTONS
+// ═══════════════════════════════════════════
+document.querySelectorAll('.tf-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tf = btn.dataset.tf;
+    currentTF = tf;
+
+    // Update active state
+    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Tell Dash parent to change TF
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'change-tf', tf: tf }, '*');
+    }
+
+    // Also try to reload with new TF via API
+    fetchWithTF(tf);
+  });
+});
+
+async function fetchWithTF(tf) {
+  try {
+    loading.style.display = 'block';
+    loading.textContent = `Loading ${tf}...`;
+    const resp = await fetch(`/api/chart-data?tf=${tf}`);
+    if (!resp.ok) throw new Error('No data');
+    const json = await resp.json();
+    if (json.candles && json.candles.length > 0) {
+      loading.style.display = 'none';
+      currentData = json;
+      renderChart(json);
+    } else {
+      loading.textContent = `No ${tf} data — run backtest with this timeframe`;
+    }
+  } catch(e) {
+    loading.textContent = `No ${tf} data available`;
+  }
+}
+
+// ═══════════════════════════════════════════
+// CHART TYPE BUTTONS
+// ═══════════════════════════════════════════
+document.querySelectorAll('.ct-btn[data-type]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentChartType = btn.dataset.type;
+    document.querySelectorAll('.ct-btn[data-type]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (currentData) renderChart(currentData);
+  });
+});
+
+// ═══════════════════════════════════════════
+// TOGGLE BUTTONS
+// ═══════════════════════════════════════════
+document.getElementById('toggle-sma').addEventListener('click', function() {
+  showSMA = !showSMA;
+  this.classList.toggle('active', showSMA);
+  if (currentData) renderChart(currentData);
+});
+
+document.getElementById('toggle-vol').addEventListener('click', function() {
+  showVolume = !showVolume;
+  this.classList.toggle('active', showVolume);
+  if (currentData) renderChart(currentData);
+});
+
+document.getElementById('toggle-trades').addEventListener('click', function() {
+  showTrades = !showTrades;
+  this.classList.toggle('active', showTrades);
+  if (currentData) renderChart(currentData);
+});
+
+// ═══════════════════════════════════════════
+// LIVE UPDATE
+// ═══════════════════════════════════════════
 async function liveUpdate() {
   try {
     const resp = await fetch(`/api/live-bar?after=${lastTimestamp}`);
     if (!resp.ok) return;
     const json = await resp.json();
-
     if (json.bar) {
-      candleSeries.update(json.bar);
-      volumeSeries.update({
-        time: json.bar.time,
-        value: json.bar.volume || 0,
-        color: json.bar.close >= json.bar.open
-          ? 'rgba(38,166,154,0.5)'
-          : 'rgba(239,83,80,0.5)',
-      });
+      const activeSeries = candleSeries || lineSeries || areaSeries || barSeries;
+      if (activeSeries) {
+        if (currentChartType === 'candles' || currentChartType === 'bars') {
+          activeSeries.update(json.bar);
+        } else {
+          activeSeries.update({ time: json.bar.time, value: json.bar.close });
+        }
+      }
+      if (volumeSeries) {
+        volumeSeries.update({
+          time: json.bar.time,
+          value: json.bar.volume || 0,
+          color: json.bar.close >= json.bar.open
+            ? 'rgba(38,166,154,0.5)' : 'rgba(239,83,80,0.5)',
+        });
+      }
       lastTimestamp = json.bar.time;
     }
   } catch(e) {}
 }
 
-// ── Init ──
-loadData();
+// ═══════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════
+document.addEventListener('keydown', (e) => {
+  const tfMap = {
+    '1': '1m', '2': '5m', '3': '15m',
+    '4': '1h', '5': '1d', '6': '1wk', '7': '1mo'
+  };
+  if (tfMap[e.key]) {
+    document.querySelector(`.tf-btn[data-tf="${tfMap[e.key]}"]`)?.click();
+  }
+});
 
-// Listen for messages from Dash parent
+// ═══════════════════════════════════════════
+// MESSAGES FROM DASH PARENT
+// ═══════════════════════════════════════════
 window.addEventListener('message', (event) => {
   if (event.data === 'reload') {
     loadData();
   }
   if (event.data === 'start-live') {
     if (liveInterval) clearInterval(liveInterval);
-    liveInterval = setInterval(liveUpdate, 5000); // 5 sec polling
+    liveInterval = setInterval(liveUpdate, 5000);
     document.getElementById('status-dot').className = 'live';
   }
   if (event.data === 'stop-live') {
     if (liveInterval) clearInterval(liveInterval);
     liveInterval = null;
     document.getElementById('status-dot').className = 'offline';
+  }
+  if (event.data?.type === 'set-tf') {
+    const tf = event.data.tf;
+    currentTF = tf;
+    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+    const tfBtn = document.querySelector(`.tf-btn[data-tf="${tf}"]`);
+    if (tfBtn) tfBtn.classList.add('active');
   }
   if (event.data?.type === 'theme') {
     const isDark = event.data.theme === 'dark';
@@ -352,6 +570,9 @@ window.addEventListener('message', (event) => {
     });
   }
 });
+
+// ── Init ──
+loadData();
 </script>
 </body>
 </html>
