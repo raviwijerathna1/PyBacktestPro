@@ -173,7 +173,7 @@ python -m pip install -r requirements.txt
 
 ---
 
-## Contributing
+## Contributing 
 - Read the code in engine.py, pine_parser.py and notebook_runner.py to understand expected interfaces (Strategy.init, Strategy.next, IND functions).
 - Add tests or example notebooks in a /examples or /notebooks directory to help users reproduce workflows.
 - If adding web features, ensure requirements.txt includes web framework dependencies.
@@ -186,3 +186,5 @@ python -m pip install -r requirements.txt
 - Would you like an example Jupyter notebook demonstrating the full workflow: convert Pine → save Strategy → run backtest → show charts?
 
 If you want, I can create a polished README.md file in the repository with this content and an example CLI snippet wired to the engine (if you confirm the desired run interface).
+
+***********************
