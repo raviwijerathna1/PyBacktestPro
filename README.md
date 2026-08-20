@@ -2,7 +2,6 @@
 
 A lightweight, script-first Python backtesting toolkit with:
 - a vectorized indicator engine and Strategy base class (engine.py),
-- a TradingView Pine Script → Python converter (pine_parser.py),
 - a notebook strategy loader (notebook_runner.py),
 - plotting & chart helpers (charts.py),
 - a small web/API surface (app.py) and example strategy (my_strategy.py).
